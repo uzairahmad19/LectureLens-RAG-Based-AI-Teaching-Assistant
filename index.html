@@ -6,126 +6,256 @@
 <title>LectureLens — Video RAG Demo</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <style>
+  /* ── Reset ── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Design tokens ── */
   :root {
-    --bg: #080b10; --surface: #0e1318; --card: #131920; --border: #1e2d3d;
-    --accent: #00d4ff; --accent2: #7b61ff; --green: #00ff9d; --orange: #ff8c42;
-    --text: #c8d8e8; --muted: #4a6070; --bright: #f0f8ff;
-    --glow: 0 0 20px rgba(0,212,255,0.15);
+    --bg:      #080b10;
+    --surface: #0e1318;
+    --card:    #131920;
+    --border:  #1e2d3d;
+    --accent:  #00d4ff;
+    --accent2: #7b61ff;
+    --green:   #00ff9d;
+    --orange:  #ff8c42;
+    --text:    #ddeeff;
+    --muted:   #6a8899;
+    --bright:  #ffffff;
+    --glow:    0 0 20px rgba(0,212,255,0.15);
   }
+
+  /* ── Base ── */
   html { scroll-behavior: smooth; }
   body {
     background: var(--bg); color: var(--text);
     font-family: 'DM Mono', monospace; font-size: 14px;
     line-height: 1.7; min-height: 100vh; overflow-x: hidden;
   }
+
+  /* subtle grid overlay */
   body::before {
-    content: ''; position: fixed; inset: 0;
-    background-image: linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
-    background-size: 40px 40px; pointer-events: none; z-index: 0;
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
+
+  /* ambient glow blobs */
   .ambient { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; opacity: 0.18; }
-  .amb1 { width: 600px; height: 600px; background: var(--accent); top: -200px; left: -100px; }
+  .amb1 { width: 600px; height: 600px; background: var(--accent);  top: -200px; left: -100px; }
   .amb2 { width: 500px; height: 500px; background: var(--accent2); bottom: -150px; right: -100px; }
+
+  /* centred content wrapper */
   .wrap { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 0 24px; }
 
+  /* ── Header ── */
   header { border-bottom: 1px solid var(--border); padding: 20px 0; animation: fadeDown 0.6s ease both; }
   .header-inner { display: flex; align-items: center; justify-content: space-between; }
   .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; color: var(--bright); letter-spacing: -0.5px; }
   .logo span { color: var(--accent); }
   .badge { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; }
 
+  /* ── Hero ── */
   .hero { padding: 72px 0 56px; animation: fadeUp 0.7s 0.1s ease both; }
   .eyebrow { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
   .eyebrow::before { content: ''; display: block; width: 24px; height: 1px; background: var(--accent); }
   h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(30px, 5vw, 52px); color: var(--bright); line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 20px; }
   h1 em { font-style: normal; color: var(--accent); }
-  .hero-sub { color: var(--muted); max-width: 520px; font-size: 14px; line-height: 1.8; }
+  .hero-sub { color: var(--text); max-width: 520px; font-size: 14px; line-height: 1.9; }
 
+  /* ── Pipeline diagram ── */
   .pipeline-section { padding: 48px 0; animation: fadeUp 0.7s 0.2s ease both; }
   .section-label { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 24px; }
-  .pipeline { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 8px; }
-  .pipe-step { flex: 1; min-width: 160px; background: var(--card); border: 1px solid var(--border); padding: 20px 16px; position: relative; transition: border-color 0.3s, box-shadow 0.3s; }
+  .pipeline { display: flex; align-items: stretch; overflow-x: auto; padding-bottom: 8px; }
+  .pipe-step {
+    flex: 1; min-width: 160px; background: var(--card);
+    border: 1px solid var(--border); padding: 20px 16px;
+    position: relative; transition: border-color 0.3s, box-shadow 0.3s;
+  }
   .pipe-step:first-child { border-radius: 10px 0 0 10px; }
   .pipe-step:last-child  { border-radius: 0 10px 10px 0; }
-  .pipe-step:not(:last-child)::after { content: '→'; position: absolute; right: -12px; top: 50%; transform: translateY(-50%); color: var(--accent); font-size: 16px; z-index: 2; background: var(--bg); padding: 0 2px; }
+  /* arrow connector between steps */
+  .pipe-step:not(:last-child)::after {
+    content: '→'; position: absolute; right: -12px; top: 50%; transform: translateY(-50%);
+    color: var(--accent); font-size: 16px; z-index: 2; background: var(--bg); padding: 0 2px;
+  }
   .pipe-step:hover { border-color: var(--accent); box-shadow: var(--glow); }
-  .pipe-num { font-size: 10px; letter-spacing: 2px; color: var(--accent); margin-bottom: 8px; text-transform: uppercase; }
+  .pipe-num   { font-size: 10px; letter-spacing: 2px; color: var(--accent); margin-bottom: 8px; text-transform: uppercase; }
   .pipe-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; color: var(--bright); margin-bottom: 6px; }
-  .pipe-desc { font-size: 11px; color: var(--muted); line-height: 1.6; }
-  .pipe-file { margin-top: 10px; font-size: 10px; color: var(--accent2); letter-spacing: 0.5px; }
+  .pipe-desc  { font-size: 11px; color: var(--text); line-height: 1.6; }
+  .pipe-file  { margin-top: 10px; font-size: 10px; color: var(--accent2); }
 
+  /* ── Demo card ── */
   .demo-section { padding: 48px 0 72px; animation: fadeUp 0.7s 0.3s ease both; }
   .demo-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-  .demo-topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
+
+  /* macOS-style title bar */
+  .demo-topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 8px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; }
   .dot.r { background: #ff5f56; } .dot.y { background: #ffbd2e; } .dot.g { background: #27c93f; }
   .demo-title { font-size: 12px; color: var(--muted); margin-left: 4px; letter-spacing: 1px; }
+
   .demo-body { padding: 28px 24px; }
 
+  /* ── Sample question chips ── */
   .chips-label { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-  .chip { padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; cursor: pointer; transition: all 0.2s; font-family: 'DM Mono', monospace; }
-  .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.05); }
+  .chip {
+    padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 12px;
+    cursor: pointer; transition: all 0.2s; font-family: 'DM Mono', monospace;
+  }
+  .chip:hover  { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.05); }
   .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
 
-  .input-row { display: flex; gap: 10px; margin-bottom: 28px; }
-  .query-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; color: var(--bright); font-family: 'DM Mono', monospace; font-size: 13px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+  /* ── Query input row ── */
+  .input-row { display: flex; gap: 10px; margin-bottom: 20px; }
+  .query-input {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; color: var(--bright);
+    font-family: 'DM Mono', monospace; font-size: 13px; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
   .query-input::placeholder { color: var(--muted); }
   .query-input:focus { border-color: var(--accent); box-shadow: var(--glow); }
-  .ask-btn { background: var(--accent); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s; white-space: nowrap; letter-spacing: 0.5px; }
-  .ask-btn:hover { background: #33ddff; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,255,0.3); }
-  .ask-btn:active { transform: translateY(0); }
+  .ask-btn {
+    background: var(--accent); color: #000; border: none;
+    padding: 12px 24px; border-radius: 8px;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  }
+  .ask-btn:hover    { background: #33ddff; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,255,0.3); }
   .ask-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-  .process-track { display: none; margin-bottom: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+  /* ── 4-step processing track ── */
+  .process-track { display: none; margin-bottom: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
   .process-track.visible { display: block; }
-  .track-steps { display: flex; gap: 0; align-items: center; }
+  .track-steps { display: flex; align-items: center; }
   .track-step { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); transition: color 0.3s; }
-  .track-step.done { color: var(--green); }
+  .track-step.done   { color: var(--green); }
   .track-step.active { color: var(--accent); }
-  .step-icon { width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; transition: all 0.3s; }
+  .step-icon {
+    width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; flex-shrink: 0; transition: all 0.3s;
+  }
   .track-step.active .step-icon { background: rgba(0,212,255,0.1); animation: pulse 1s infinite; }
-  .track-step.done .step-icon { background: rgba(0,255,157,0.1); border-color: var(--green); }
+  .track-step.done   .step-icon { background: rgba(0,255,157,0.1); border-color: var(--green); }
   .track-arrow { color: var(--border); font-size: 12px; padding: 0 4px; flex-shrink: 0; }
 
+  /* ── Error box ── */
+  .error-box { background: rgba(255,80,80,0.07); border: 1px solid rgba(255,80,80,0.25); border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; font-size: 12px; color: #ff8080; display: none; }
+  .error-box.visible { display: block; }
+
+  /* ── Results area (answer + eval) ── */
   .results-area { display: none; }
   .results-area.visible { display: block; }
 
-  .error-box { background: rgba(255,80,80,0.07); border: 1px solid rgba(255,80,80,0.25); border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; font-size: 12px; color: #ff7070; display: none; }
-  .error-box.visible { display: block; }
-
-  .answer-box { background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; padding: 20px; opacity: 0; transform: translateY(8px); transition: opacity 0.5s 0.6s, transform 0.5s 0.6s; box-shadow: 0 0 30px rgba(0,212,255,0.06); }
+  /* LLM answer box */
+  .answer-box {
+    background: var(--surface); border: 1px solid var(--accent); border-radius: 8px;
+    padding: 24px; opacity: 0; transform: translateY(8px);
+    transition: opacity 0.5s, transform 0.5s;
+    box-shadow: 0 0 30px rgba(0,212,255,0.06);
+  }
   .answer-box.show { opacity: 1; transform: translateY(0); }
-  .answer-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .answer-label {
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
   .answer-label::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: block; box-shadow: 0 0 8px var(--accent); }
-  .answer-text { font-size: 13px; color: var(--bright); line-height: 1.85; }
-  .answer-text strong { color: var(--accent); font-weight: 500; }
-  .answer-text .ts { color: var(--green); }
+  .answer-text { font-size: 14px; color: var(--bright); line-height: 2; }
 
-  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--border); }
+  /* ── Inline evaluation panel ── */
+  .inline-eval {
+    margin-top: 16px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    opacity: 0; transform: translateY(8px); transition: opacity 0.4s, transform 0.4s;
+  }
+  .inline-eval.show { opacity: 1; transform: translateY(0); }
+
+  .inline-eval-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    background: rgba(123,97,255,0.05);
+  }
+  .inline-eval-title {
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent2); display: flex; align-items: center; gap: 8px;
+  }
+  .inline-eval-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 6px var(--accent2); display: block; }
+  .inline-eval-meta { font-size: 11px; color: var(--muted); }
+
+  /* spinner shown while eval request is in-flight */
+  .eval-loading { display: none; align-items: center; gap: 10px; padding: 18px 20px; font-size: 12px; color: var(--muted); }
+  .eval-loading.visible { display: flex; }
+  .eval-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent2); animation: spin 0.7s linear infinite; flex-shrink: 0; }
+
+  .inline-eval-body { display: none; padding: 18px 20px; }
+  .inline-eval-body.visible { display: block; }
+
+  /* 2-column metric cards (MRR + Precision@5 only) */
+  .inline-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+  .inline-metric {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 12px; text-align: center;
+    opacity: 0; transform: translateY(4px); transition: opacity 0.35s, transform 0.35s;
+  }
+  .inline-metric.show { opacity: 1; transform: translateY(0); }
+  .inline-metric:hover { border-color: var(--accent2); }
+  .im-name  { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .im-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 28px; color: var(--bright); }
+  .im-value span { font-size: 12px; color: var(--accent2); }
+  .im-desc  { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .im-bar   { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .im-bar-fill { height: 100%; border-radius: 2px; width: 0; transition: width 0.9s 0.2s ease; }
+
+  /* breakdown table */
+  .inline-pq-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .pq-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
+  .pq-table th { text-align: left; padding: 8px 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .pq-table td { padding: 10px 12px; color: var(--text); border-bottom: 1px solid rgba(30,45,61,0.5); vertical-align: top; }
+  .pq-table tr:last-child td { border-bottom: none; }
+  .pq-query-text { color: var(--bright); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+  .pill-good { background: rgba(0,255,157,0.1); color: var(--green);  border: 1px solid rgba(0,255,157,0.2); }
+  .pill-ok   { background: rgba(255,140,66,0.1); color: var(--orange); border: 1px solid rgba(255,140,66,0.2); }
+  .pill-low  { background: rgba(255,80,80,0.1);  color: #ff8080;      border: 1px solid rgba(255,80,80,0.2); }
+
+  /* keywords row */
+  .eval-keywords-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .eval-kw-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; flex-shrink: 0; }
+  .eval-kw-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .eval-kw-pill  { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(123,97,255,0.1); color: var(--accent2); border: 1px solid rgba(123,97,255,0.2); }
+
+  /* ── Stats row ── */
+  .stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--border); }
   .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 18px; text-align: center; transition: border-color 0.3s; }
   .stat-card:hover { border-color: var(--accent); }
-  .stat-val { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 32px; color: var(--bright); letter-spacing: -1px; }
+  .stat-val { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 30px; color: var(--bright); letter-spacing: -1px; }
   .stat-val span { color: var(--accent); }
   .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: 1px; }
 
+  /* ── Footer ── */
   footer { border-top: 1px solid var(--border); padding: 24px 0; text-align: center; font-size: 11px; color: var(--muted); letter-spacing: 1px; }
 
+  /* ── Animations ── */
   @keyframes fadeUp   { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
   @keyframes fadeDown { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
-  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(0,212,255,0.4); } 50% { box-shadow: 0 0 0 5px rgba(0,212,255,0); } }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(0,212,255,0.4); } 50% { box-shadow:0 0 0 5px rgba(0,212,255,0); } }
+  @keyframes spin  { to { transform: rotate(360deg); } }
 
-  @media (max-width: 600px) {
+  /* ── Mobile ── */
+  @media (max-width: 620px) {
     .pipeline { flex-direction: column; }
     .pipe-step { border-radius: 8px !important; }
     .pipe-step::after { display: none !important; }
     .track-steps { flex-direction: column; gap: 8px; }
     .track-arrow { display: none; }
-    .stats-row { grid-template-columns: 1fr; }
+    .stats-row, .inline-metrics { grid-template-columns: 1fr; }
     h1 { font-size: 28px; }
-    .chunk-card { grid-template-columns: auto 1fr; }
-    .chunk-sim { display: none; }
   }
 </style>
 </head>
@@ -133,6 +263,7 @@
 <div class="ambient amb1"></div>
 <div class="ambient amb2"></div>
 
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
 <header>
   <div class="wrap header-inner">
     <div class="logo">Lecture<span>Lens</span></div>
@@ -140,14 +271,20 @@
   </div>
 </header>
 
+<!-- ── Hero ───────────────────────────────────────────────────────────── -->
 <section class="hero">
   <div class="wrap">
     <div class="eyebrow">Video Intelligence System</div>
     <h1>Ask anything about<br/>your <em>lecture videos</em></h1>
-    <p class="hero-sub">A Retrieval-Augmented Generation pipeline that transcribes, indexes, and semantically searches lecture content — guiding you to the exact timestamp where your answer lives.</p>
+    <p class="hero-sub">
+      A Retrieval-Augmented Generation pipeline that transcribes, indexes,
+      and semantically searches lecture content — guiding you to the exact
+      timestamp where your answer lives.
+    </p>
   </div>
 </section>
 
+<!-- ── Pipeline diagram ───────────────────────────────────────────────── -->
 <section class="pipeline-section">
   <div class="wrap">
     <div class="section-label">// system architecture</div>
@@ -155,49 +292,59 @@
       <div class="pipe-step">
         <div class="pipe-num">01 · Stage</div>
         <div class="pipe-title">Audio Extraction</div>
-        <div class="pipe-desc">FFmpeg strips audio tracks from MP4 lectures into structured MP3 files.</div>
+        <div class="pipe-desc">FFmpeg strips audio from MP4 lectures and saves structured MP3 files.</div>
         <div class="pipe-file">process_video.py</div>
       </div>
       <div class="pipe-step">
         <div class="pipe-num">02 · Stage</div>
         <div class="pipe-title">Transcription</div>
-        <div class="pipe-desc">Faster-Whisper converts speech to timed text segments (chunks) in JSON.</div>
+        <div class="pipe-desc">Faster-Whisper converts speech into timed text segments saved as JSON.</div>
         <div class="pipe-file">create_chunks.py</div>
       </div>
       <div class="pipe-step">
         <div class="pipe-num">03 · Stage</div>
         <div class="pipe-title">Embedding</div>
-        <div class="pipe-desc">BGE-M3 encodes each chunk into a semantic vector and persists to disk.</div>
+        <div class="pipe-desc">BGE-M3 encodes each text chunk into a semantic vector stored on disk.</div>
         <div class="pipe-file">read_chunks.py</div>
       </div>
       <div class="pipe-step">
         <div class="pipe-num">04 · Stage</div>
         <div class="pipe-title">RAG Query</div>
-        <div class="pipe-desc">Cosine similarity retrieves top-K chunks; LLaMA 3.2 synthesises the answer.</div>
+        <div class="pipe-desc">Cosine similarity retrieves top-K chunks; LLaMA 3.2 generates the answer.</div>
         <div class="pipe-file">process_query.py</div>
       </div>
     </div>
   </div>
 </section>
 
+<!-- ── Interactive demo ───────────────────────────────────────────────── -->
 <section class="demo-section">
   <div class="wrap">
     <div class="section-label">// interactive demo</div>
     <div class="demo-card">
+
+      <!-- macOS-style title bar -->
       <div class="demo-topbar">
-        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <div class="dot r"></div>
+        <div class="dot y"></div>
+        <div class="dot g"></div>
         <span class="demo-title">lecturelens — query terminal</span>
       </div>
+
       <div class="demo-body">
 
+        <!-- Sample question chips -->
         <div class="chips-label">// try a sample question</div>
         <div class="chips" id="chips"></div>
 
+        <!-- Query input -->
         <div class="input-row">
-          <input class="query-input" id="queryInput" type="text" placeholder="e.g. How does groupby work in pandas?" />
-          <button class="ask-btn" id="askBtn" onclick="runDemo()">Ask &rarr;</button>
+          <input class="query-input" id="queryInput" type="text"
+            placeholder="e.g. How does groupby work in pandas?" />
+          <button class="ask-btn" id="askBtn" onclick="runQuery()">Ask &rarr;</button>
         </div>
 
+        <!-- 4-step processing animation -->
         <div class="process-track" id="processTrack">
           <div class="track-steps">
             <div class="track-step" id="ts0"><div class="step-icon">1</div><span>Embedding query</span></div>
@@ -210,19 +357,68 @@
           </div>
         </div>
 
+        <!-- Error message -->
         <div class="error-box" id="errorBox"></div>
 
+        <!-- Results: answer + auto evaluation -->
         <div class="results-area" id="resultsArea">
+
+          <!-- LLM answer -->
           <div class="answer-box" id="answerBox">
             <div class="answer-label">LLaMA 3.2 &middot; Generated Response</div>
             <div class="answer-text" id="answerText"></div>
           </div>
+
+          <!-- Inline evaluation (auto-runs after every query) -->
+          <div class="inline-eval" id="inlineEval">
+            <div class="inline-eval-header">
+              <div class="inline-eval-title">
+                <span class="inline-eval-dot"></span>
+                Retrieval Evaluation
+              </div>
+              <div class="inline-eval-meta" id="inlineEvalMeta"></div>
+            </div>
+
+            <!-- Spinner shown while /evaluate request is in-flight -->
+            <div class="eval-loading" id="evalLoading">
+              <span class="eval-spinner"></span> Running evaluation on your query…
+            </div>
+
+            <!-- Results: metric cards + breakdown table + keywords -->
+            <div class="inline-eval-body" id="inlineEvalBody">
+              <div class="inline-metrics" id="inlineMetrics"></div>
+
+              <div class="inline-pq-label">// query breakdown</div>
+              <table class="pq-table">
+                <thead>
+                  <tr>
+                    <th>Query</th>
+                    <th>Recip. Rank</th>
+                    <th>Prec@5</th>
+                    <th>Relevant / 5</th>
+                  </tr>
+                </thead>
+                <tbody id="inlinePqBody"></tbody>
+              </table>
+
+              <div class="eval-keywords-row">
+                <span class="eval-kw-label">Keywords used:</span>
+                <span id="evalKeywords" class="eval-kw-pills"></span>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- Static stats -->
         <div class="stats-row">
-          <div class="stat-card"><div class="stat-val">12<span>k+</span></div><div class="stat-lbl">Chunks Indexed</div></div>
-          <div class="stat-card"><div class="stat-val">1024<span>d</span></div><div class="stat-lbl">Embedding Dims</div></div>
-          <div class="stat-card"><div class="stat-val">~<span>0.4s</span></div><div class="stat-lbl">Retrieval Time</div></div>
+          <div class="stat-card">
+            <div class="stat-val">12<span>k+</span></div>
+            <div class="stat-lbl">Chunks Indexed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val">1024<span>d</span></div>
+            <div class="stat-lbl">Embedding Dimensions</div>
+          </div>
         </div>
 
       </div>
@@ -230,13 +426,19 @@
   </div>
 </section>
 
+<!-- ── Footer ─────────────────────────────────────────────────────────── -->
 <footer>
-  <div class="wrap">LectureLens &nbsp;&middot;&nbsp; Final Year Data Science Project &nbsp;&middot;&nbsp; Faster-Whisper &nbsp;&middot;&nbsp; BGE-M3 &nbsp;&middot;&nbsp; LLaMA 3.2</div>
+  <div class="wrap">
+    LectureLens &nbsp;&middot;&nbsp; Final Year Data Science Project
+    &nbsp;&middot;&nbsp; Faster-Whisper &nbsp;&middot;&nbsp; BGE-M3 &nbsp;&middot;&nbsp; LLaMA 3.2
+  </div>
 </footer>
 
 <script>
-const FLASK_URL = "http://localhost:5000/query";
+const FLASK_QUERY_URL = "http://localhost:5000/query";
+const FLASK_EVAL_URL  = "http://localhost:5000/evaluate";
 
+// Sample questions shown as clickable chips
 const SAMPLES = [
   "How does groupby work in pandas?",
   "What is the difference between loc and iloc?",
@@ -245,11 +447,38 @@ const SAMPLES = [
   "How do I merge two DataFrames?"
 ];
 
-// Build chips
+// Common English words that carry no semantic signal — stripped before
+// sending keywords to /evaluate so the metric is actually meaningful
+const STOPWORDS = new Set([
+  "how","does","do","what","is","the","a","an","in","of","to","i","with",
+  "two","can","me","explain","difference","between","and","or","for","are",
+  "work","works","use","using","from","my","this","that","it","be","about"
+]);
+
+// Only MRR and Precision@5 — the two academically standard retrieval metrics
+const METRIC_DEFS = [
+  {
+    key: "mrr",
+    label: "MRR",
+    fullLabel: "Mean Reciprocal Rank",
+    color: "#00d4ff",
+    desc: "How highly the first relevant chunk is ranked. 1.0 = always #1."
+  },
+  {
+    key: "precision_at_k",
+    label: "Precision@5",
+    fullLabel: "Precision at K = 5",
+    color: "#7b61ff",
+    desc: "Fraction of the 5 retrieved chunks that were relevant to the query."
+  }
+];
+
+// ── Build sample chips ────────────────────────────────────────────────────
 const chipsEl = document.getElementById("chips");
 SAMPLES.forEach(s => {
   const c = document.createElement("div");
-  c.className = "chip"; c.textContent = s;
+  c.className = "chip";
+  c.textContent = s;
   c.onclick = () => {
     document.querySelectorAll(".chip").forEach(x => x.classList.remove("active"));
     c.classList.add("active");
@@ -258,18 +487,80 @@ SAMPLES.forEach(s => {
   chipsEl.appendChild(c);
 });
 
+// ── Utilities ─────────────────────────────────────────────────────────────
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function showError(msg) {
-  const box = document.getElementById("errorBox");
-  box.textContent = msg;
-  box.classList.add("visible");
+  const b = document.getElementById("errorBox");
+  b.textContent = msg;
+  b.classList.add("visible");
 }
 function hideError() {
   document.getElementById("errorBox").classList.remove("visible");
 }
 
-async function runDemo() {
+// Strip stopwords and punctuation to get meaningful search keywords
+function extractKeywords(query) {
+  return query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !STOPWORDS.has(w));
+}
+
+// ── Render evaluation results into the inline panel ───────────────────────
+function renderEvalResults(result, keywords) {
+  document.getElementById("evalLoading").classList.remove("visible");
+
+  const body = document.getElementById("inlineEvalBody");
+  body.classList.add("visible");
+
+  // Metric cards
+  const metricsEl = document.getElementById("inlineMetrics");
+  metricsEl.innerHTML = "";
+  METRIC_DEFS.forEach((m, i) => {
+    const pct  = Math.round(result[m.key] * 100);
+    const card = document.createElement("div");
+    card.className = "inline-metric";
+    card.innerHTML =
+      '<div class="im-name">'  + m.fullLabel + '</div>' +
+      '<div class="im-value">' + pct + '<span>%</span></div>' +
+      '<div class="im-desc">'  + m.desc + '</div>' +
+      '<div class="im-bar"><div class="im-bar-fill" style="background:' + m.color + ';width:0" data-w="' + pct + '%"></div></div>';
+    metricsEl.appendChild(card);
+    // staggered entrance animation
+    setTimeout(() => {
+      card.classList.add("show");
+      card.querySelector(".im-bar-fill").style.width = pct + "%";
+    }, i * 120 + 60);
+  });
+
+  // Single-row breakdown table
+  const tbody = document.getElementById("inlinePqBody");
+  tbody.innerHTML = "";
+  result.per_query.forEach(row => {
+    const rrPct = Math.round(row.reciprocal_rank * 100);
+    const prPct = Math.round(row.precision_at_k  * 100);
+    const pill  = (v, g, o) => v >= g ? "pill-good" : v >= o ? "pill-ok" : "pill-low";
+    const tr    = document.createElement("tr");
+    tr.innerHTML =
+      '<td class="pq-query-text">' + row.query + '</td>' +
+      '<td><span class="pill ' + pill(rrPct, 100, 50) + '">' + rrPct + '%</span></td>' +
+      '<td><span class="pill ' + pill(prPct,  60, 40) + '">' + prPct + '%</span></td>' +
+      '<td>' + row.relevant_count + ' / ' + row.top_k + '</td>';
+    tbody.appendChild(tr);
+  });
+
+  // Keyword pills
+  document.getElementById("evalKeywords").innerHTML =
+    keywords.map(k => '<span class="eval-kw-pill">' + k + '</span>').join("");
+
+  document.getElementById("inlineEvalMeta").textContent =
+    "top-" + result.top_k + " · " + keywords.length + " keywords";
+}
+
+// ── Main flow: query → answer → auto-evaluate ─────────────────────────────
+async function runQuery() {
   const query = document.getElementById("queryInput").value.trim();
   if (!query) return;
 
@@ -277,82 +568,105 @@ async function runDemo() {
   btn.disabled = true;
   hideError();
 
-  // Reset previous result
+  // Reset all output areas
   document.getElementById("resultsArea").classList.remove("visible");
   document.getElementById("answerBox").classList.remove("show");
+  document.getElementById("inlineEval").classList.remove("show");
+  document.getElementById("inlineEvalBody").classList.remove("visible");
+  document.getElementById("evalLoading").classList.remove("visible");
+  document.getElementById("inlineMetrics").innerHTML = "";
+  document.getElementById("inlinePqBody").innerHTML  = "";
 
-  // Show and animate the processing track
+  // ── Animate steps 1–3 immediately (they happen fast server-side) ──
   const track = document.getElementById("processTrack");
   track.classList.add("visible");
-  const steps = [0,1,2,3].map(i => document.getElementById("ts"+i));
+  const steps = [0,1,2,3].map(i => document.getElementById("ts" + i));
   steps.forEach((s, i) => {
     s.className = "track-step";
-    s.querySelector(".step-icon").textContent = (i+1);
+    s.querySelector(".step-icon").textContent = i + 1;
   });
 
-  // Steps 1–3 animate immediately (embedding + retrieval happen fast on the backend)
   for (let i = 0; i < 3; i++) {
     steps[i].classList.add("active");
-    await delay(500);
+    await delay(480);
     steps[i].classList.remove("active");
     steps[i].classList.add("done");
     steps[i].querySelector(".step-icon").textContent = "✓";
   }
 
-  // Step 4 (LLM generating) stays active while we wait for the real API response
+  // Step 4 (LLM generating) stays pulsing until the real response arrives
   steps[3].classList.add("active");
 
+  // ── Call /query ──
   let answer;
   try {
-    const res = await fetch(FLASK_URL, {
+    const res = await fetch(FLASK_QUERY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: query })
     });
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || "Server returned " + res.status);
     }
-
-    const data = await res.json();
-    answer = data.answer;
-
+    answer = (await res.json()).answer;
   } catch (e) {
     steps[3].classList.remove("active");
     track.classList.remove("visible");
-    showError("⚠ Could not reach Flask server — is app.py running on port 5000? (" + e.message + ")");
+    showError("⚠ Could not reach Flask — is app.py running on port 5000? (" + e.message + ")");
     btn.disabled = false;
     return;
   }
 
-  // Mark step 4 done
+  // Mark step 4 done, hide track
   steps[3].classList.remove("active");
   steps[3].classList.add("done");
   steps[3].querySelector(".step-icon").textContent = "✓";
-  await delay(300);
+  await delay(280);
   track.classList.remove("visible");
 
-  // Render the answer
-  // Convert plain newlines to <br> so multi-paragraph answers display properly
-  const formatted = answer
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n{2,}/g, "<br><br>")
-    .replace(/\n/g, "<br>");
+  // Render the LLM answer — escape HTML then convert newlines to <br>
+  document.getElementById("answerText").innerHTML = answer
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\n{2,}/g, "<br><br>").replace(/\n/g, "<br>");
 
-  document.getElementById("answerText").innerHTML = formatted;
   document.getElementById("resultsArea").classList.add("visible");
-
   await delay(50);
   document.getElementById("answerBox").classList.add("show");
+
+  // ── Small pause, then auto-run /evaluate on the same query ──
+  await delay(400);
+
+  const keywords = extractKeywords(query);
+  const evalPanel = document.getElementById("inlineEval");
+  evalPanel.classList.add("show");
+  document.getElementById("evalLoading").classList.add("visible");
+  evalPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  try {
+    const evalRes = await fetch(FLASK_EVAL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tests: [{ query: query, relevant_keywords: keywords }],
+        top_k: 5
+      })
+    });
+    if (!evalRes.ok) throw new Error("Eval server returned " + evalRes.status);
+    renderEvalResults(await evalRes.json(), keywords);
+  } catch (e) {
+    document.getElementById("evalLoading").classList.remove("visible");
+    document.getElementById("inlineEvalBody").classList.add("visible");
+    document.getElementById("inlineMetrics").innerHTML =
+      '<div style="font-size:12px;color:#ff8080;grid-column:1/-1">⚠ Evaluation failed: ' + e.message + '</div>';
+  }
 
   btn.disabled = false;
 }
 
-document.getElementById("queryInput").addEventListener("keydown", function(e) {
-  if (e.key === "Enter") runDemo();
+// Allow submitting with Enter key
+document.getElementById("queryInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") runQuery();
 });
 </script>
 </body>

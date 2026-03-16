@@ -68,5 +68,92 @@ Answer naturally, mention which video and timestamp covers this topic. Use "minu
     # chunks_out = top_chunks[["name","number","start","end","text","similarity"]].to_dict(orient="records")
     return jsonify({"answer": answer})
 
+# Metrics computed:
+#
+#   MRR  (Mean Reciprocal Rank)
+#        Measures how high the first relevant result appears in the ranked
+#        list. MRR = 1.0 means the correct chunk is always ranked #1.
+#        MRR = 0.5 means it's on average ranked #2.
+#        Formula: MRR = (1/N) * sum(1 / rank_of_first_relevant)
+#
+#   Precision@K
+#        Fraction of the top-K retrieved chunks that are actually relevant.
+#        e.g. Precision@5 = 0.8 means 4 of the 5 chunks matched the query.
+#        Formula: P@K = (relevant chunks in top-K) / K
+#
+# POST body format:
+#   {
+#     "tests": [
+#       {
+#         "query": "How does groupby work?",
+#         "relevant_keywords": ["groupby", "aggregate", "split"]
+#       },
+#       ...
+#     ],
+#     "top_k": 5
+#   }
+#
+# A chunk is considered relevant if its text contains ANY of the keywords.
+# ---------------------------------------------------------------------------
+
+@app.route("/evaluate", methods=["POST"])
+def evaluate():
+    body  = request.json or {}
+    tests = body.get("tests", [])
+    top_k = int(body.get("top_k", 5))
+
+    if not tests:
+        return jsonify({"error": "Provide a 'tests' list with query + relevant_keywords"}), 400
+
+    matrix = np.vstack(df["embedding"].values)
+
+    reciprocal_ranks  = []
+    precisions_at_k   = []
+    per_query_results = []
+
+    for test in tests:
+        query    = test.get("query", "").strip()
+        keywords = [kw.lower() for kw in test.get("relevant_keywords", [])]
+
+        if not query:
+            continue
+
+        q_vec     = embed(query)
+        sims      = cosine_similarity(matrix, [q_vec]).flatten()
+        idx       = sims.argsort()[::-1][:top_k]
+        top_texts = df.loc[idx, "text"].str.lower().tolist()
+
+        # A chunk is relevant if it contains any keyword
+        relevance = [any(kw in text for kw in keywords) for text in top_texts]
+
+        # MRR — find rank of first relevant result
+        rr = 0.0
+        for rank, is_rel in enumerate(relevance, start=1):
+            if is_rel:
+                rr = 1.0 / rank
+                break
+        reciprocal_ranks.append(rr)
+
+        precision = sum(relevance) / top_k
+        precisions_at_k.append(precision)
+
+        per_query_results.append({
+            "query":           query,
+            "reciprocal_rank": round(rr, 4),
+            "precision_at_k":  round(precision, 4),
+            "relevant_count":  sum(relevance),
+            "top_k":           top_k,
+        })
+
+    n = len(reciprocal_ranks)
+    return jsonify({
+        "num_queries":    n,
+        "top_k":          top_k,
+        "mrr":            round(float(np.mean(reciprocal_ranks)), 4),
+        "precision_at_k": round(float(np.mean(precisions_at_k)), 4),
+        "per_query":      per_query_results,
+    })
+
+
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
