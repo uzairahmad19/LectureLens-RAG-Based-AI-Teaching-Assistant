@@ -1,0 +1,297 @@
+# LectureLens — Video RAG System
+
+A Retrieval-Augmented Generation (RAG) pipeline that turns lecture videos into a searchable, conversational knowledge base. Ask any question about your course and the system tells you exactly which video to watch and at what timestamp.
+
+Built as a Final Year Data Science project.
+
+---
+
+## What It Does
+
+You type a question like *"How does groupby work in pandas?"* and the system:
+
+1. Converts your question into a semantic vector using BGE-M3
+2. Searches thousands of lecture transcript chunks using cosine similarity
+3. Passes the most relevant chunks to LLaMA 3.2 as context
+4. Returns a natural language answer with the exact video title and timestamp
+
+After every query, it automatically evaluates the quality of its own retrieval using **MRR** and **Precision@5**.
+
+---
+
+## Project Structure
+
+```
+LectureLens/
+│
+├── videos/                        ← Place your course .mp4 files here
+├── audios/                        ← Auto-created: extracted .mp3 files
+├── transcripts/                   ← Auto-created: JSON transcript chunks
+│
+├── process_video.py               Stage 1 — Extract audio from videos
+├── create_chunks.py               Stage 2 — Transcribe audio to text chunks
+├── read_chunks.py                 Stage 3 — Generate and save embeddings
+├── process_query.py               Stage 4 — CLI query interface
+│
+├── app.py                         Flask API (query + evaluate endpoints)
+├── index.html                     Frontend demo
+│
+└── chunks_with_embeddings.joblib  Auto-created: embedded chunk database
+```
+
+---
+
+## Pipeline Overview
+
+```
+videos/          audios/          transcripts/       .joblib
+  .mp4   ──►      .mp3   ──►      .json chunks  ──►  embeddings
+          FFmpeg          Whisper                BGE-M3
+
+                                    ▼
+                             Flask API (app.py)
+                                    ▼
+                            index.html (frontend)
+```
+
+| Stage | File | Tool | What it does |
+|-------|------|------|--------------|
+| 1 | `process_video.py` | FFmpeg | Extracts audio from `.mp4` lecture files |
+| 2 | `create_chunks.py` | Faster-Whisper | Transcribes audio into timed text segments |
+| 3 | `read_chunks.py` | BGE-M3 via Ollama | Embeds each chunk into a 1024-dim vector |
+| 4 | `app.py` | LLaMA 3.2 via Ollama | Retrieves chunks and generates answers |
+
+---
+
+## Getting Started
+
+### 1. Prerequisites
+
+Install the following before running anything:
+
+- **Python 3.10+**
+- **FFmpeg** — [ffmpeg.org](https://ffmpeg.org/download.html) — must be on your system PATH
+- **Ollama** — [ollama.com](https://ollama.com) — runs LLMs locally
+
+Pull the required models through Ollama:
+
+```bash
+ollama pull bge-m3
+ollama pull llama3.2
+```
+
+### 2. Install Python dependencies
+
+```bash
+pip install faster-whisper flask flask-cors numpy pandas joblib scikit-learn requests
+```
+
+### 3. Add your course videos
+
+Download your lecture videos and place all `.mp4` files inside the `videos/` folder:
+
+```
+videos/
+  Part 1 - Introduction to Pandas.mp4
+  Part 2 - DataFrames and Series.mp4
+  Part 3 - Data Cleaning.mp4
+  ...
+```
+
+> **Naming tip:** The pipeline automatically extracts the episode number from filenames that contain `Part`, `Episode`, `Lesson`, or `Ep` followed by a number — e.g. `Part 3`, `Episode 7`, `Lesson 12`. Make sure your filenames follow this pattern.
+
+---
+
+## Running the Pipeline
+
+Run these scripts **once**, in order. After that you only need `app.py`.
+
+### Stage 1 — Extract audio
+
+```bash
+python process_video.py
+```
+
+Reads every `.mp4` from `videos/`, extracts the audio track using FFmpeg, and saves `.mp3` files into `audios/`.
+
+### Stage 2 — Transcribe
+
+```bash
+python create_chunks.py
+```
+
+Loads each `.mp3` from `audios/`, transcribes it using Faster-Whisper, and saves timed text chunks as JSON files in `transcripts/`.
+
+> ⚠️ This step takes time depending on how many videos you have. On low-end hardware, expect roughly 1–3× real-time (a 30-minute lecture may take 30–90 minutes to transcribe).
+
+### Stage 3 — Generate embeddings
+
+```bash
+python read_chunks.py
+```
+
+Reads all JSON transcripts, sends each chunk to the BGE-M3 model via Ollama to generate a 1024-dimensional embedding vector, and saves everything into `chunks_with_embeddings.joblib`.
+
+> ⚠️ This also takes time on first run. The `.joblib` file is reused on every query after this — you never need to run this again unless you add new videos.
+
+### Stage 4 — Start the API
+
+```bash
+python app.py
+```
+
+Starts the Flask server on `http://localhost:5000`. Keep this running while using the frontend.
+
+---
+
+## Running the Frontend
+
+Open a second terminal in the project folder and run:
+
+```bash
+python -m http.server 8080
+```
+
+Then open your browser and go to:
+
+```
+http://localhost:8080
+```
+
+> **VS Code users:** Install the **Live Server** extension by Ritwick Dey, then right-click `index.html` → *Open with Live Server*. It auto-reloads when you save the file.
+
+---
+
+## API Reference
+
+### `POST /query`
+
+Takes a natural language question and returns the LLM-generated answer.
+
+**Request:**
+```json
+{ "question": "How does groupby work in pandas?" }
+```
+
+**Response:**
+```json
+{ "answer": "This is covered in Video 5 — GroupBy and Aggregation..." }
+```
+
+---
+
+### `POST /evaluate`
+
+Runs retrieval evaluation against a labelled test set and returns MRR and Precision@K.
+
+**Request:**
+```json
+{
+  "tests": [
+    {
+      "query": "How does groupby work?",
+      "relevant_keywords": ["groupby", "aggregate", "group"]
+    }
+  ],
+  "top_k": 5
+}
+```
+
+**Response:**
+```json
+{
+  "num_queries": 1,
+  "top_k": 5,
+  "mrr": 1.0,
+  "precision_at_k": 0.8,
+  "per_query": [...]
+}
+```
+
+A chunk is counted as **relevant** if its text contains any of the `relevant_keywords` (case-insensitive). The frontend automatically extracts keywords from your query and calls this endpoint after every question.
+
+---
+
+## Evaluation Metrics
+
+| Metric | Formula | What it means |
+|--------|---------|---------------|
+| **MRR** (Mean Reciprocal Rank) | `1 / rank_of_first_relevant_chunk` | How highly the first relevant chunk is ranked. 1.0 = always #1 |
+| **Precision@5** | `relevant_chunks_in_top_5 / 5` | Fraction of the 5 retrieved chunks that were actually relevant |
+
+**Interpreting scores:**
+
+| Score | MRR | Precision@5 |
+|-------|-----|-------------|
+| 🟢 Good | ≥ 1.0 | ≥ 0.6 |
+| 🟡 Acceptable | ≥ 0.5 | ≥ 0.4 |
+| 🔴 Poor | < 0.5 | < 0.4 |
+
+---
+
+## Low-End Hardware Optimisations
+
+This project was developed and tested on a **low-spec machine**. Several deliberate choices were made to keep it runnable without a GPU or large amounts of RAM:
+
+| Optimisation | Detail |
+|---|---|
+| **Faster-Whisper instead of original Whisper** | Uses CTranslate2 under the hood — roughly 4× faster on CPU with identical accuracy |
+| **int8 quantisation** | `compute_type="int8"` in `create_chunks.py` halves Whisper's memory usage with minimal quality loss |
+| **`base` Whisper model** | Chosen over `small`, `medium`, or `large` — accurate enough for clear lecture audio, much faster to run |
+| **CPU device mode** | `device="cpu"` in Faster-Whisper — no GPU required |
+| **LLaMA 3.2 (3B)** | Smallest capable LLaMA model — runs on 4–6 GB RAM via Ollama without GPU offloading |
+| **BGE-M3 via Ollama** | Embedding inference handled locally by Ollama, avoiding any cloud dependency or GPU requirement |
+| **Chunk text truncated to 400 chars** | In `retrieve()`, chunk text sent to the LLM is capped at 400 characters — keeps the prompt short and generation fast |
+| **Embeddings pre-computed and cached** | All chunk embeddings are computed once and saved to `.joblib`. Every query loads from disk instantly — no re-embedding on each request |
+| **Top-K = 5** | Only the 5 most relevant chunks are passed to the LLM, keeping prompt size and generation time low |
+| **Non-streaming generation** | `"stream": False` in Ollama calls — simpler to handle and avoids incremental token overhead on slow machines |
+
+---
+
+## Technologies Used
+
+| Component | Technology |
+|-----------|------------|
+| Audio extraction | FFmpeg |
+| Speech-to-text | Faster-Whisper (`base` model, int8, CPU) |
+| Embedding model | BGE-M3 (via Ollama) |
+| Language model | LLaMA 3.2 (via Ollama) |
+| Similarity search | Cosine similarity (scikit-learn) |
+| Backend API | Flask + Flask-CORS |
+| Data storage | pandas DataFrame + joblib |
+| Frontend | Vanilla HTML / CSS / JavaScript |
+
+---
+
+## Troubleshooting
+
+**FFmpeg not found**
+Make sure FFmpeg is installed and on your system PATH. Test with `ffmpeg -version` in a terminal.
+
+**Ollama connection refused**
+Make sure Ollama is running before starting `app.py`. Run `ollama serve` in a separate terminal, or check that the Ollama desktop app is open.
+
+**`chunks_with_embeddings.joblib` not found**
+You need to run all three pipeline scripts (`process_video.py` → `create_chunks.py` → `read_chunks.py`) before starting the API.
+
+**Transcription is very slow**
+This is expected on CPU. Consider running overnight for large video collections. Each file is skipped automatically if already transcribed, so you can stop and resume safely.
+
+**LLM response is slow**
+LLaMA 3.2 on CPU can take 30–90 seconds per response depending on your hardware. This is normal for local inference without a GPU.
+
+---
+
+## Folder Setup Checklist
+
+Before running the pipeline, make sure this is in place:
+
+- [ ] `videos/` folder exists and contains your `.mp4` lecture files
+- [ ] FFmpeg is installed and accessible from terminal
+- [ ] Ollama is running with `bge-m3` and `llama3.2` pulled
+- [ ] Python dependencies are installed
+- [ ] `audios/` and `transcripts/` folders will be created automatically
+
+---
+
+*LectureLens — Final Year Data Science Project*
