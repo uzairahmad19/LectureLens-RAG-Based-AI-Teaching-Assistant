@@ -44,7 +44,9 @@ LectureLens/
 
 ## Pipeline Overview
 
-image to be added
+![LectureLens](https://github.com/user-attachments/assets/f432d5c5-06ff-44de-bb4b-c778dab88a33)
+
+
 
 | Stage | File | Tool | What it does |
 |-------|------|------|--------------|
@@ -218,6 +220,24 @@ A chunk is counted as **relevant** if its text contains any of the `relevant_key
 ---
 
 ## Screenshots
+
+**Landing Page:**
+
+<img width="1920" height="910" alt="homepage" src="https://github.com/user-attachments/assets/5a89fc37-01e8-474f-9a2b-0ae4df21499e" />
+
+**ChatBox:**
+
+<img width="1920" height="910" alt="demo" src="https://github.com/user-attachments/assets/b494c1f4-10bf-4f95-ba70-117e7c6bc427" />
+
+**Sample Query & Response:**
+
+<img width="1920" height="909" alt="response loading" src="https://github.com/user-attachments/assets/e29a25f4-5b01-4666-bf8c-1ec4b4ada1a5" />
+<img width="1920" height="800" alt="output" src="https://github.com/user-attachments/assets/9e5e58b7-9fa6-400d-9c53-8f4544094606" />
+
+**Evaluation:**
+
+<img width="1920" height="817" alt="evaluation" src="https://github.com/user-attachments/assets/80d4a98b-ed3e-44b9-8419-84429e6c1dc4" />
+
 
 
 ## Evaluation Metrics
