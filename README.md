@@ -270,7 +270,8 @@ This file accumulates across sessions, making it easy to compare quality over mu
 
 **Evaluation:**
 
-<img width="1920" height="817" alt="evaluation" src="https://github.com/user-attachments/assets/80d4a98b-ed3e-44b9-8419-84429e6c1dc4" />
+<img width="1920" height="917" alt="eval" src="https://github.com/user-attachments/assets/5764f646-e2a1-416f-9e03-14f8bb3c34f4" />
+
 
 
 ## Low-End Hardware Optimisations
