@@ -3,16 +3,23 @@ from flask_cors import CORS
 import numpy as np
 import joblib
 import requests
+import logging
 from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
 CORS(app)
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
 EMBEDDINGS_FILE = "chunks_with_embeddings.joblib"
 
-OLLAMA_EMBED_URL   = "http://localhost:11434/api/embed"
+OLLAMA_EMBED_URL    = "http://localhost:11434/api/embed"
 OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
-
 
 COURSE_SUBJECT = "Data Analysis using Python"
 
@@ -24,18 +31,24 @@ def format_timestamp(sec):
     return f"{int(sec//60):02}:{int(sec%60):02}"
 
 def embed(text):
+    """Embeds a single string using BGE-M3 via Ollama."""
     r = requests.post(OLLAMA_EMBED_URL, json={"model": "bge-m3", "input": [text]})
     return r.json()["embeddings"][0]
 
+def embed_many(texts: list) -> list:
+    """Embeds a list of strings in one Ollama call."""
+    r = requests.post(OLLAMA_EMBED_URL, json={"model": "bge-m3", "input": texts})
+    return r.json()["embeddings"]
+
 def retrieve(query_vec, top_k=5):
     matrix = np.vstack(df["embedding"].values)
-    sims = cosine_similarity(matrix, [query_vec]).flatten()
-    idx = sims.argsort()[::-1][:top_k]
+    sims   = cosine_similarity(matrix, [query_vec]).flatten()
+    idx    = sims.argsort()[::-1][:top_k]
     result = df.loc[idx].copy()
     result["similarity"] = sims[idx].tolist()
     result["start"] = result["start"].apply(format_timestamp)
     result["end"]   = result["end"].apply(format_timestamp)
-    result["text"]  = result["text"].str[:400] # limit text length for output
+    result["text"]  = result["text"].str[:400]
     return result
 
 def generate(prompt):
@@ -44,114 +57,94 @@ def generate(prompt):
     })
     return r.json()["response"]
 
+# Cosine similarity evaluation
+
+def evaluate_with_cosine(question: str, answer: str, chunk_texts: list) -> dict:
+    """
+    Evaluates answer quality using cosine similarity on BGE-M3 embeddings.
+
+    Two metrics:
+
+    answer_relevancy:
+    How semantically close is the generated answer to the original question?
+    High = answer is on-topic. Low = answer is vague or off-topic.
+
+    faithfulness :
+    How closely does the answer language match the retrieved source chunks?
+
+    range 0.0 – 1.0.
+    """
+    try:
+
+        # Embed question and answer
+        question_vec = np.array(embed(question))
+        answer_vec   = np.array(embed(answer))
+
+        # answer_relevancy: 
+        answer_relevancy = float(
+            cosine_similarity([question_vec], [answer_vec])[0][0]
+        )
+
+        # faithfulness: 
+        chunk_vecs   = np.array(embed_many(chunk_texts))
+        chunk_sims   = cosine_similarity([answer_vec], chunk_vecs)[0]
+        faithfulness = float(np.mean(chunk_sims))
+
+        scores = {
+            "answer_relevancy": round(answer_relevancy, 4),
+            "faithfulness":     round(faithfulness,     4),
+        }
+        return scores
+
+    except Exception as e:
+        logger.error("Cosine evaluation failed: %s", e)
+        return {"error": str(e)}
+
+
+# Routes
+
 @app.route("/query", methods=["POST"])
 def query():
-    data = request.json
+    """
+    POST { "question": "..." }
+
+    Returns:
+    {
+      "answer": "...",
+      "evaluation": {
+        "answer_relevancy": 0.87,   // question ↔ answer similarity  (0–1)
+        "faithfulness":     0.91    // answer   ↔ chunks similarity   (0–1)
+      }
+    }
+
+    """
+    data     = request.json
     question = data.get("question", "").strip()
     if not question:
         return jsonify({"error": "Empty question"}), 400
 
-    query_vec   = embed(question)
-    top_chunks  = retrieve(query_vec)
+    # --- Retrieve ---
+    query_vec  = embed(question)
+    top_chunks = retrieve(query_vec)
 
-    context = top_chunks[["name","number","start","end","text"]].to_json(orient="records")
-    prompt = f"""You are a teaching assistant for a course on {COURSE_SUBJECT}.
+    # --- Generate ---
+    context = top_chunks[["name", "number", "start", "end", "text"]].to_json(orient="records")
+    prompt  = f"""You are a teaching assistant for a course on {COURSE_SUBJECT}.
 Here are transcript chunks from lecture videos (name, number, start, end, text):
 {context}
 ---
 Question: "{question}"
-Answer naturally, mention which video and timestamp covers this topic. Use "minutes and seconds" format when citing timestamps (e.g. "at 5 minutes 12 seconds").If the answer is not in the provided chunks, say "Sorry, I don't know". Be concise and to the point"""
+Answer naturally, mention which video and timestamp covers this topic. Use "minutes and seconds" format when citing timestamps (e.g. "at 5 minutes 12 seconds"). If the answer is not in the provided chunks, say "Sorry, I don't know". Be concise and to the point."""
 
     answer = generate(prompt)
 
-    # # Format chunks for output
-    # chunks_out = top_chunks[["name","number","start","end","text","similarity"]].to_dict(orient="records")
-    return jsonify({"answer": answer})
+    # --- Cosine similarity evaluation ---
+    chunk_texts = top_chunks["text"].tolist()
+    eval_scores = evaluate_with_cosine(question, answer, chunk_texts)
 
-# Metrics computed:
-#
-#   MRR  (Mean Reciprocal Rank)
-#        Measures how high the first relevant result appears in the ranked
-#        list. MRR = 1.0 means the correct chunk is always ranked #1.
-#        MRR = 0.5 means it's on average ranked #2.
-#        Formula: MRR = (1/N) * sum(1 / rank_of_first_relevant)
-#
-#   Precision@K
-#        Fraction of the top-K retrieved chunks that are actually relevant.
-#        e.g. Precision@5 = 0.8 means 4 of the 5 chunks matched the query.
-#        Formula: P@K = (relevant chunks in top-K) / K
-#
-# POST body format:
-#   {
-#     "tests": [
-#       {
-#         "query": "How does groupby work?",
-#         "relevant_keywords": ["groupby", "aggregate", "split"]
-#       },
-#       ...
-#     ],
-#     "top_k": 5
-#   }
-#
-# A chunk is considered relevant if its text contains ANY of the keywords.
-# ---------------------------------------------------------------------------
-
-@app.route("/evaluate", methods=["POST"])
-def evaluate():
-    body  = request.json or {}
-    tests = body.get("tests", [])
-    top_k = int(body.get("top_k", 5))
-
-    if not tests:
-        return jsonify({"error": "Provide a 'tests' list with query + relevant_keywords"}), 400
-
-    matrix = np.vstack(df["embedding"].values)
-
-    reciprocal_ranks  = []
-    precisions_at_k   = []
-    per_query_results = []
-
-    for test in tests:
-        query    = test.get("query", "").strip()
-        keywords = [kw.lower() for kw in test.get("relevant_keywords", [])]
-
-        if not query:
-            continue
-
-        q_vec     = embed(query)
-        sims      = cosine_similarity(matrix, [q_vec]).flatten()
-        idx       = sims.argsort()[::-1][:top_k]
-        top_texts = df.loc[idx, "text"].str.lower().tolist()
-
-        # A chunk is relevant if it contains any keyword
-        relevance = [any(kw in text for kw in keywords) for text in top_texts]
-
-        # MRR — find rank of first relevant result
-        rr = 0.0
-        for rank, is_rel in enumerate(relevance, start=1):
-            if is_rel:
-                rr = 1.0 / rank
-                break
-        reciprocal_ranks.append(rr)
-
-        precision = sum(relevance) / top_k
-        precisions_at_k.append(precision)
-
-        per_query_results.append({
-            "query":           query,
-            "reciprocal_rank": round(rr, 4),
-            "precision_at_k":  round(precision, 4),
-            "relevant_count":  sum(relevance),
-            "top_k":           top_k,
-        })
-
-    n = len(reciprocal_ranks)
     return jsonify({
-        "num_queries":    n,
-        "top_k":          top_k,
-        "mrr":            round(float(np.mean(reciprocal_ranks)), 4),
-        "precision_at_k": round(float(np.mean(precisions_at_k)), 4),
-        "per_query":      per_query_results,
+        "answer":     answer,
+        "evaluation": eval_scores,
     })
 
 

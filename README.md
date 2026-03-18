@@ -11,11 +11,10 @@ Built as a Final Year Data Science project.
 You type a question like *"How does groupby work in pandas?"* and the system:
 
 1. Converts your question into a semantic vector using BGE-M3
-2. Searches thousands of lecture transcript chunks using cosine similarity
+2. Searches lecture transcript chunks using cosine similarity
 3. Passes the most relevant chunks to LLaMA 3.2 as context
 4. Returns a natural language answer with the exact video title and timestamp
-
-After every query, it automatically evaluates the quality of its own retrieval using **MRR** and **Precision@5**.
+5. Automatically evaluates the answer quality using **cosine similarity** — no external evaluation library or LLM judge required
 
 ---
 
@@ -26,17 +25,20 @@ LectureLens/
 │
 ├── videos/                        ← Place your course .mp4 files here
 ├── audios/                        ← Auto-created: extracted .mp3 files
-├── transcripts/                   ← Auto-created: JSON transcript chunks
+├── transcripts/                   ← Auto-created: raw JSON transcript chunks
+├── merged_transcripts/            ← Auto-created: merged JSON chunks
 │
 ├── process_video.py               Stage 1 — Extract audio from videos
 ├── create_chunks.py               Stage 2 — Transcribe audio to text chunks
+├── merge_chunks.py                Stage 2b — Merge small chunks into larger ones
 ├── read_chunks.py                 Stage 3 — Generate and save embeddings
-├── process_query.py               Stage 4 — CLI query interface
+├── process_query.py               Stage 4 — CLI query interface with evaluation
 │
-├── app.py                         Flask API (query + evaluate endpoints)
+├── app.py                         Flask API (query endpoint)
 ├── index.html                     Frontend demo
 │
-└── chunks_with_embeddings.joblib  Auto-created: embedded chunk database
+├── chunks_with_embeddings.joblib  Auto-created: embedded chunk database
+└── eval_log.json                  Auto-created: evaluation scores log (CLI)
 ```
 
 ---
@@ -58,8 +60,9 @@ videos/          audios/          transcripts/       .joblib
 |-------|------|------|--------------|
 | 1 | `process_video.py` | FFmpeg | Extracts audio from `.mp4` lecture files |
 | 2 | `create_chunks.py` | Faster-Whisper | Transcribes audio into timed text segments |
+| 2b | `merge_chunks.py` | — | Merges small segments into larger chunks (groups of 5) |
 | 3 | `read_chunks.py` | BGE-M3 via Ollama | Embeds each chunk into a 1024-dim vector |
-| 4 | `app.py` | LLaMA 3.2 via Ollama | Retrieves chunks and generates answers |
+| 4 | `app.py` | LLaMA 3.2 via Ollama | Retrieves chunks, generates answers, evaluates quality |
 
 ---
 
@@ -85,6 +88,8 @@ ollama pull llama3.2
 ```bash
 pip install faster-whisper flask flask-cors numpy pandas joblib scikit-learn requests
 ```
+
+No additional evaluation libraries are needed — the evaluation is built on top of BGE-M3 and scikit-learn, which are already in the stack.
 
 ### 3. Add your course videos
 
@@ -124,15 +129,23 @@ Loads each `.mp3` from `audios/`, transcribes it using Faster-Whisper, and saves
 
 > ⚠️ This step takes time depending on how many videos you have. On low-end hardware, expect roughly 1–3× real-time (a 30-minute lecture may take 30–90 minutes to transcribe).
 
+### Stage 2b — Merge chunks
+
+```bash
+python merge_chunks.py
+```
+
+Reads the raw JSON files from `transcripts/` and merges every 5 consecutive segments into a single larger chunk, saving the results into `merged_transcripts/`. This reduces the total number of chunks and gives the embedding model more context per unit.
+
 ### Stage 3 — Generate embeddings
 
 ```bash
 python read_chunks.py
 ```
 
-Reads all JSON transcripts, sends each chunk to the BGE-M3 model via Ollama to generate a 1024-dimensional embedding vector, and saves everything into `chunks_with_embeddings.joblib`.
+Reads all JSON files from `merged_transcripts/`, sends each chunk to BGE-M3 via Ollama to generate a 1024-dimensional embedding vector, and saves everything into `chunks_with_embeddings.joblib`.
 
-> ⚠️ This also takes time on first run. The `.joblib` file is reused on every query after this — you never need to run this again unless you add new videos.
+> ⚠️ This also takes time on first run. The `.joblib` file is reused on every query — you never need to run this again unless you add new videos.
 
 ### Stage 4 — Start the API
 
@@ -162,11 +175,23 @@ http://localhost:8080
 
 ---
 
+## CLI Usage
+
+You can also query the system directly from the terminal without the frontend:
+
+```bash
+python process_query.py
+```
+
+After the answer is printed, evaluation scores are shown immediately and appended to `eval_log.json` for tracking quality over time.
+
+---
+
 ## API Reference
 
 ### `POST /query`
 
-Takes a natural language question and returns the LLM-generated answer.
+Takes a natural language question, returns the LLM-generated answer, and automatically evaluates its quality using cosine similarity.
 
 **Request:**
 ```json
@@ -175,57 +200,66 @@ Takes a natural language question and returns the LLM-generated answer.
 
 **Response:**
 ```json
-{ "answer": "This is covered in Video 5 — GroupBy and Aggregation..." }
+{
+  "answer": "This is covered in Video 5 — GroupBy and Aggregation, at 3 minutes 22 seconds...",
+  "evaluation": {
+    "answer_relevancy": 0.87,
+    "faithfulness": 0.91
+  }
+}
 ```
+
+The `evaluation` field is always present. If embedding fails for any reason, it will contain `{"error": "..."}` instead of scores, but the `answer` is always returned regardless.
 
 ---
 
-### `POST /evaluate`
+## Evaluation
 
-Runs retrieval evaluation against a labelled test set and returns MRR and Precision@K.
+### How it works
 
-**Request:**
+After every query, two quality scores are computed using the same BGE-M3 embeddings already used for retrieval. No extra libraries, no LLM judge, no ground truth labels needed.
+
+| Metric | Comparison | What it tells you |
+|--------|------------|-------------------|
+| **Answer Relevancy** | question ↔ answer | Is the answer semantically on-topic for the question? Low = vague or off-topic response |
+| **Faithfulness** | answer ↔ retrieved chunks (averaged) | Is the answer grounded in the source material? Low = answer diverges from the chunks (hallucination risk) |
+
+Both scores are in the range **0.0 – 1.0**.
+
+### How scores are computed
+
+```
+answer_relevancy = cosine_similarity( embed(question), embed(answer) )
+
+faithfulness     = mean( cosine_similarity( embed(answer), embed(chunk_i) )
+                         for each retrieved chunk )
+```
+
+### Interpreting scores
+
+| Score | Meaning |
+|-------|---------|
+| ≥ 0.70 | 🟢 Good |
+| ≥ 0.50 | 🟡 Acceptable |
+| < 0.50 | 🔴 Poor |
+
+### Score log (CLI)
+
+When running `process_query.py`, scores for every query are appended to `eval_log.json`:
+
 ```json
-{
-  "tests": [
-    {
-      "query": "How does groupby work?",
-      "relevant_keywords": ["groupby", "aggregate", "group"]
+[
+  {
+    "query": "How does groupby work in pandas?",
+    "scores": {
+      "answer_relevancy": 0.87,
+      "faithfulness": 0.91
     }
-  ],
-  "top_k": 5
-}
+  }
+]
 ```
 
-**Response:**
-```json
-{
-  "num_queries": 1,
-  "top_k": 5,
-  "mrr": 1.0,
-  "precision_at_k": 0.8,
-  "per_query": [...]
-}
-```
-
-A chunk is counted as **relevant** if its text contains any of the `relevant_keywords` (case-insensitive). The frontend automatically extracts keywords from your query and calls this endpoint after every question.
-
----
-
-## Evaluation Metrics
-
-| Metric | Formula | What it means |
-|--------|---------|---------------|
-| **MRR** (Mean Reciprocal Rank) | `1 / rank_of_first_relevant_chunk` | How highly the first relevant chunk is ranked. 1.0 = always #1 |
-| **Precision@5** | `relevant_chunks_in_top_5 / 5` | Fraction of the 5 retrieved chunks that were actually relevant |
-
-**Interpreting scores:**
-
-| Score | MRR | Precision@5 |
-|-------|-----|-------------|
-| 🟢 Good | ≥ 1.0 | ≥ 0.6 |
-| 🟡 Acceptable | ≥ 0.5 | ≥ 0.4 |
-| 🔴 Poor | < 0.5 | < 0.4 |
+This file accumulates across sessions, making it easy to compare quality over multiple queries for your project report.
 
 ---
 
@@ -245,6 +279,7 @@ This project was developed and tested on a **low-spec machine**. Several deliber
 | **Embeddings pre-computed and cached** | All chunk embeddings are computed once and saved to `.joblib`. Every query loads from disk instantly — no re-embedding on each request |
 | **Top-K = 5** | Only the 5 most relevant chunks are passed to the LLM, keeping prompt size and generation time low |
 | **Non-streaming generation** | `"stream": False` in Ollama calls — simpler to handle and avoids incremental token overhead on slow machines |
+| **Evaluation reuses existing embeddings** | Quality scores are computed using the same BGE-M3 model already running — no second model or extra memory needed |
 
 ---
 
@@ -257,6 +292,7 @@ This project was developed and tested on a **low-spec machine**. Several deliber
 | Embedding model | BGE-M3 (via Ollama) |
 | Language model | LLaMA 3.2 (via Ollama) |
 | Similarity search | Cosine similarity (scikit-learn) |
+| Answer evaluation | Cosine similarity on BGE-M3 embeddings (no extra libraries) |
 | Backend API | Flask + Flask-CORS |
 | Data storage | pandas DataFrame + joblib |
 | Frontend | Vanilla HTML / CSS / JavaScript |
@@ -272,13 +308,16 @@ Make sure FFmpeg is installed and on your system PATH. Test with `ffmpeg -versio
 Make sure Ollama is running before starting `app.py`. Run `ollama serve` in a separate terminal, or check that the Ollama desktop app is open.
 
 **`chunks_with_embeddings.joblib` not found**
-You need to run all three pipeline scripts (`process_video.py` → `create_chunks.py` → `read_chunks.py`) before starting the API.
+You need to run all pipeline scripts (`process_video.py` → `create_chunks.py` → `merge_chunks.py` → `read_chunks.py`) before starting the API.
 
 **Transcription is very slow**
 This is expected on CPU. Consider running overnight for large video collections. Each file is skipped automatically if already transcribed, so you can stop and resume safely.
 
 **LLM response is slow**
 LLaMA 3.2 on CPU can take 30–90 seconds per response depending on your hardware. This is normal for local inference without a GPU.
+
+**Evaluation scores seem low**
+A faithfulness score below 0.5 usually means the answer contains information not present in the retrieved chunks. A low answer relevancy score means the response did not address the question directly. Both are useful signals for debugging retrieval or prompt quality.
 
 ---
 
@@ -290,7 +329,7 @@ Before running the pipeline, make sure this is in place:
 - [ ] FFmpeg is installed and accessible from terminal
 - [ ] Ollama is running with `bge-m3` and `llama3.2` pulled
 - [ ] Python dependencies are installed
-- [ ] `audios/` and `transcripts/` folders will be created automatically
+- [ ] `audios/`, `transcripts/`, and `merged_transcripts/` folders will be created automatically
 
 ---
 

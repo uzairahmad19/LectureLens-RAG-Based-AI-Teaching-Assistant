@@ -168,67 +168,55 @@
   .answer-label::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: block; box-shadow: 0 0 8px var(--accent); }
   .answer-text { font-size: 14px; color: var(--bright); line-height: 2; }
 
-  /* ── Inline evaluation panel ── */
-  .inline-eval {
+
+  /* ── RAGAS panel ── */
+  .ragas-panel {
     margin-top: 16px; background: var(--surface);
     border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
     opacity: 0; transform: translateY(8px); transition: opacity 0.4s, transform 0.4s;
   }
-  .inline-eval.show { opacity: 1; transform: translateY(0); }
+  .ragas-panel.show { opacity: 1; transform: translateY(0); }
 
-  .inline-eval-header {
+  .ragas-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 18px; border-bottom: 1px solid var(--border);
-    background: rgba(123,97,255,0.05);
+    background: rgba(0,255,157,0.04);
   }
-  .inline-eval-title {
+  .ragas-title {
     font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-    color: var(--accent2); display: flex; align-items: center; gap: 8px;
+    color: var(--green); display: flex; align-items: center; gap: 8px;
   }
-  .inline-eval-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 6px var(--accent2); display: block; }
-  .inline-eval-meta { font-size: 11px; color: var(--muted); }
+  .ragas-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); display: block; }
+  .ragas-subtitle { font-size: 11px; color: var(--muted); }
 
-  /* spinner shown while eval request is in-flight */
-  .eval-loading { display: none; align-items: center; gap: 10px; padding: 18px 20px; font-size: 12px; color: var(--muted); }
-  .eval-loading.visible { display: flex; }
-  .eval-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent2); animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  .ragas-loading { display: none; align-items: center; gap: 10px; padding: 18px 20px; font-size: 12px; color: var(--muted); }
+  .ragas-loading.visible { display: flex; }
+  .ragas-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--green); animation: spin 0.7s linear infinite; flex-shrink: 0; }
 
-  .inline-eval-body { display: none; padding: 18px 20px; }
-  .inline-eval-body.visible { display: block; }
+  .ragas-body { display: none; padding: 18px 20px; }
+  .ragas-body.visible { display: block; }
 
-  /* 2-column metric cards (MRR + Precision@5 only) */
-  .inline-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
-  .inline-metric {
+  .ragas-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .ragas-metric {
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
     padding: 14px 12px; text-align: center;
     opacity: 0; transform: translateY(4px); transition: opacity 0.35s, transform 0.35s;
   }
-  .inline-metric.show { opacity: 1; transform: translateY(0); }
-  .inline-metric:hover { border-color: var(--accent2); }
-  .im-name  { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  .im-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 28px; color: var(--bright); }
-  .im-value span { font-size: 12px; color: var(--accent2); }
-  .im-desc  { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
-  .im-bar   { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-  .im-bar-fill { height: 100%; border-radius: 2px; width: 0; transition: width 0.9s 0.2s ease; }
+  .ragas-metric.show { opacity: 1; transform: translateY(0); }
+  .ragas-metric:hover { border-color: var(--green); }
+  .rm-name  { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .rm-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 28px; color: var(--bright); }
+  .rm-value span { font-size: 12px; color: var(--green); }
+  .rm-desc  { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .rm-bar   { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .rm-bar-fill { height: 100%; border-radius: 2px; width: 0; transition: width 0.9s 0.2s ease; background: var(--green); }
 
-  /* breakdown table */
-  .inline-pq-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-  .pq-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
-  .pq-table th { text-align: left; padding: 8px 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
-  .pq-table td { padding: 10px 12px; color: var(--text); border-bottom: 1px solid rgba(30,45,61,0.5); vertical-align: top; }
-  .pq-table tr:last-child td { border-bottom: none; }
-  .pq-query-text { color: var(--bright); }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
-  .pill-good { background: rgba(0,255,157,0.1); color: var(--green);  border: 1px solid rgba(0,255,157,0.2); }
-  .pill-ok   { background: rgba(255,140,66,0.1); color: var(--orange); border: 1px solid rgba(255,140,66,0.2); }
-  .pill-low  { background: rgba(255,80,80,0.1);  color: #ff8080;      border: 1px solid rgba(255,80,80,0.2); }
+  .ragas-note { margin-top: 14px; font-size: 10px; color: var(--muted); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 12px; }
+  .ragas-note strong { color: var(--green); }
 
-  /* keywords row */
-  .eval-keywords-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .eval-kw-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; flex-shrink: 0; }
-  .eval-kw-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-  .eval-kw-pill  { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(123,97,255,0.1); color: var(--accent2); border: 1px solid rgba(123,97,255,0.2); }
+  @media (max-width: 620px) {
+    .ragas-metrics { grid-template-columns: 1fr; }
+  }
 
   /* ── Stats row ── */
   .stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--border); }
@@ -267,7 +255,7 @@
 <header>
   <div class="wrap header-inner">
     <div class="logo">Lecture<span>Lens</span></div>
-    <div class="badge">Final Year Project · 2025</div>
+    <div class="badge">RAG based AI teaching assistant · 2026</div>
   </div>
 </header>
 
@@ -369,44 +357,23 @@
             <div class="answer-text" id="answerText"></div>
           </div>
 
-          <!-- Inline evaluation (auto-runs after every query) -->
-          <div class="inline-eval" id="inlineEval">
-            <div class="inline-eval-header">
-              <div class="inline-eval-title">
-                <span class="inline-eval-dot"></span>
-                Retrieval Evaluation
+          <!-- Cosine Similarity evaluation panel (auto-runs after every query) -->
+          <div class="ragas-panel" id="ragasPanel">
+            <div class="ragas-header">
+              <div class="ragas-title">
+                <span class="ragas-dot"></span>
+                Cosine Similarity · Answer Quality
               </div>
-              <div class="inline-eval-meta" id="inlineEvalMeta"></div>
+              <div class="ragas-subtitle" id="ragasSubtitle">Faithfulness &amp; Relevancy</div>
             </div>
-
-            <!-- Spinner shown while /evaluate request is in-flight -->
-            <div class="eval-loading" id="evalLoading">
-              <span class="eval-spinner"></span> Running evaluation on your query…
+            <div class="ragas-loading" id="ragasLoading">
+              <span class="ragas-spinner"></span> Evaluating answer quality…
             </div>
-
-            <!-- Results: metric cards + breakdown table + keywords -->
-            <div class="inline-eval-body" id="inlineEvalBody">
-              <div class="inline-metrics" id="inlineMetrics"></div>
-
-              <div class="inline-pq-label">// query breakdown</div>
-              <table class="pq-table">
-                <thead>
-                  <tr>
-                    <th>Query</th>
-                    <th>Recip. Rank</th>
-                    <th>Prec@5</th>
-                    <th>Relevant / 5</th>
-                  </tr>
-                </thead>
-                <tbody id="inlinePqBody"></tbody>
-              </table>
-
-              <div class="eval-keywords-row">
-                <span class="eval-kw-label">Keywords used:</span>
-                <span id="evalKeywords" class="eval-kw-pills"></span>
-              </div>
+            <div class="ragas-body" id="ragasBody">
+              <div class="ragas-metrics" id="ragasMetrics"></div>
             </div>
           </div>
+
         </div>
 
         <!-- Static stats -->
@@ -436,7 +403,6 @@
 
 <script>
 const FLASK_QUERY_URL = "http://localhost:5000/query";
-const FLASK_EVAL_URL  = "http://localhost:5000/evaluate";
 
 // Sample questions shown as clickable chips
 const SAMPLES = [
@@ -445,32 +411,6 @@ const SAMPLES = [
   "How to handle missing values in a dataset?",
   "Explain matplotlib subplots",
   "How do I merge two DataFrames?"
-];
-
-// Common English words that carry no semantic signal — stripped before
-// sending keywords to /evaluate so the metric is actually meaningful
-const STOPWORDS = new Set([
-  "how","does","do","what","is","the","a","an","in","of","to","i","with",
-  "two","can","me","explain","difference","between","and","or","for","are",
-  "work","works","use","using","from","my","this","that","it","be","about"
-]);
-
-// Only MRR and Precision@5 — the two academically standard retrieval metrics
-const METRIC_DEFS = [
-  {
-    key: "mrr",
-    label: "MRR",
-    fullLabel: "Mean Reciprocal Rank",
-    color: "#00d4ff",
-    desc: "How highly the first relevant chunk is ranked. 1.0 = always #1."
-  },
-  {
-    key: "precision_at_k",
-    label: "Precision@5",
-    fullLabel: "Precision at K = 5",
-    color: "#7b61ff",
-    desc: "Fraction of the 5 retrieved chunks that were relevant to the query."
-  }
 ];
 
 // ── Build sample chips ────────────────────────────────────────────────────
@@ -499,67 +439,47 @@ function hideError() {
   document.getElementById("errorBox").classList.remove("visible");
 }
 
-// Strip stopwords and punctuation to get meaningful search keywords
-function extractKeywords(query) {
-  return query
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !STOPWORDS.has(w));
-}
+// ── Render cosine similarity scores into the panel ───────────────────────
+const RAGAS_DEFS = [
+  {
+    key: "faithfulness",
+    label: "Faithfulness",
+    desc: "Is the answer grounded in the retrieved chunks? Low = hallucination risk.",
+  },
+  {
+    key: "answer_relevancy",
+    label: "Answer Relevancy",
+    desc: "Does the answer actually address the question? Low = vague or off-topic.",
+  }
+];
 
-// ── Render evaluation results into the inline panel ───────────────────────
-function renderEvalResults(result, keywords) {
-  document.getElementById("evalLoading").classList.remove("visible");
-
-  const body = document.getElementById("inlineEvalBody");
+function renderRagasScores(scores) {
+  document.getElementById("ragasLoading").classList.remove("visible");
+  const body = document.getElementById("ragasBody");
   body.classList.add("visible");
 
-  // Metric cards
-  const metricsEl = document.getElementById("inlineMetrics");
+  const metricsEl = document.getElementById("ragasMetrics");
   metricsEl.innerHTML = "";
-  METRIC_DEFS.forEach((m, i) => {
-    const pct  = Math.round(result[m.key] * 100);
+
+  RAGAS_DEFS.forEach((m, i) => {
+    const val  = scores[m.key] !== undefined ? scores[m.key] : null;
+    const pct  = val !== null ? Math.round(val * 100) : "—";
     const card = document.createElement("div");
-    card.className = "inline-metric";
+    card.className = "ragas-metric";
     card.innerHTML =
-      '<div class="im-name">'  + m.fullLabel + '</div>' +
-      '<div class="im-value">' + pct + '<span>%</span></div>' +
-      '<div class="im-desc">'  + m.desc + '</div>' +
-      '<div class="im-bar"><div class="im-bar-fill" style="background:' + m.color + ';width:0" data-w="' + pct + '%"></div></div>';
+      '<div class="rm-name">'  + m.label + '</div>' +
+      '<div class="rm-value">' + pct + (val !== null ? '<span>%</span>' : '') + '</div>' +
+      '<div class="rm-desc">'  + m.desc  + '</div>' +
+      '<div class="rm-bar"><div class="rm-bar-fill" data-w="' + pct + '%"></div></div>';
     metricsEl.appendChild(card);
-    // staggered entrance animation
     setTimeout(() => {
       card.classList.add("show");
-      card.querySelector(".im-bar-fill").style.width = pct + "%";
+      if (val !== null) card.querySelector(".rm-bar-fill").style.width = pct + "%";
     }, i * 120 + 60);
   });
-
-  // Single-row breakdown table
-  const tbody = document.getElementById("inlinePqBody");
-  tbody.innerHTML = "";
-  result.per_query.forEach(row => {
-    const rrPct = Math.round(row.reciprocal_rank * 100);
-    const prPct = Math.round(row.precision_at_k  * 100);
-    const pill  = (v, g, o) => v >= g ? "pill-good" : v >= o ? "pill-ok" : "pill-low";
-    const tr    = document.createElement("tr");
-    tr.innerHTML =
-      '<td class="pq-query-text">' + row.query + '</td>' +
-      '<td><span class="pill ' + pill(rrPct, 100, 50) + '">' + rrPct + '%</span></td>' +
-      '<td><span class="pill ' + pill(prPct,  60, 40) + '">' + prPct + '%</span></td>' +
-      '<td>' + row.relevant_count + ' / ' + row.top_k + '</td>';
-    tbody.appendChild(tr);
-  });
-
-  // Keyword pills
-  document.getElementById("evalKeywords").innerHTML =
-    keywords.map(k => '<span class="eval-kw-pill">' + k + '</span>').join("");
-
-  document.getElementById("inlineEvalMeta").textContent =
-    "top-" + result.top_k + " · " + keywords.length + " keywords";
 }
 
-// ── Main flow: query → answer → auto-evaluate ─────────────────────────────
+// Main flow 
 async function runQuery() {
   const query = document.getElementById("queryInput").value.trim();
   if (!query) return;
@@ -571,13 +491,12 @@ async function runQuery() {
   // Reset all output areas
   document.getElementById("resultsArea").classList.remove("visible");
   document.getElementById("answerBox").classList.remove("show");
-  document.getElementById("inlineEval").classList.remove("show");
-  document.getElementById("inlineEvalBody").classList.remove("visible");
-  document.getElementById("evalLoading").classList.remove("visible");
-  document.getElementById("inlineMetrics").innerHTML = "";
-  document.getElementById("inlinePqBody").innerHTML  = "";
+  document.getElementById("ragasPanel").classList.remove("show");
+  document.getElementById("ragasBody").classList.remove("visible");
+  document.getElementById("ragasLoading").classList.remove("visible");
+  document.getElementById("ragasMetrics").innerHTML = "";
 
-  // ── Animate steps 1–3 immediately (they happen fast server-side) ──
+  // ── Animate steps 1–3 immediately) ──
   const track = document.getElementById("processTrack");
   track.classList.add("visible");
   const steps = [0,1,2,3].map(i => document.getElementById("ts" + i));
@@ -598,7 +517,7 @@ async function runQuery() {
   steps[3].classList.add("active");
 
   // ── Call /query ──
-  let answer;
+  let answer, ragasScores;
   try {
     const res = await fetch(FLASK_QUERY_URL, {
       method: "POST",
@@ -609,7 +528,9 @@ async function runQuery() {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || "Server returned " + res.status);
     }
-    answer = (await res.json()).answer;
+    const json = await res.json();
+    answer      = json.answer;
+    ragasScores = json.evaluation || null;
   } catch (e) {
     steps[3].classList.remove("active");
     track.classList.remove("visible");
@@ -625,7 +546,7 @@ async function runQuery() {
   await delay(280);
   track.classList.remove("visible");
 
-  // Render the LLM answer — escape HTML then convert newlines to <br>
+  // Render the LLM answer
   document.getElementById("answerText").innerHTML = answer
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/\n{2,}/g, "<br><br>").replace(/\n/g, "<br>");
@@ -634,31 +555,24 @@ async function runQuery() {
   await delay(50);
   document.getElementById("answerBox").classList.add("show");
 
-  // ── Small pause, then auto-run /evaluate on the same query ──
-  await delay(400);
+  // ── Show cosine similarity scores (returned by /query) ──
+  await delay(300);
+  const ragasPanel = document.getElementById("ragasPanel");
+  ragasPanel.classList.add("show");
 
-  const keywords = extractKeywords(query);
-  const evalPanel = document.getElementById("inlineEval");
-  evalPanel.classList.add("show");
-  document.getElementById("evalLoading").classList.add("visible");
-  evalPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
-
-  try {
-    const evalRes = await fetch(FLASK_EVAL_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tests: [{ query: query, relevant_keywords: keywords }],
-        top_k: 5
-      })
-    });
-    if (!evalRes.ok) throw new Error("Eval server returned " + evalRes.status);
-    renderEvalResults(await evalRes.json(), keywords);
-  } catch (e) {
-    document.getElementById("evalLoading").classList.remove("visible");
-    document.getElementById("inlineEvalBody").classList.add("visible");
-    document.getElementById("inlineMetrics").innerHTML =
-      '<div style="font-size:12px;color:#ff8080;grid-column:1/-1">⚠ Evaluation failed: ' + e.message + '</div>';
+  if (ragasScores && !ragasScores.error) {
+    renderRagasScores(ragasScores);
+  } else {
+    // Show loading briefly then display error/unavailable message
+    document.getElementById("ragasLoading").classList.add("visible");
+    await delay(400);
+    document.getElementById("ragasLoading").classList.remove("visible");
+    document.getElementById("ragasBody").classList.add("visible");
+    const reason = ragasScores
+      ? ragasScores.error
+      : "Scores unavailable";
+    document.getElementById("ragasMetrics").innerHTML =
+      '<div style="font-size:12px;color:#ff8080;grid-column:1/-1">⚠ ' + reason + '</div>';
   }
 
   btn.disabled = false;
